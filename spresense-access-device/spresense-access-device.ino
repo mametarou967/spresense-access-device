@@ -12,6 +12,11 @@
 #include "mqtt-config.h"
 // servo include
 #include <Servo.h>
+// disp
+#include "SPI.h"
+#include "Adafruit_GFX.h"
+#include "Adafruit_ILI9341.h"
+#include "qrcode.h"
 
 // ■constant
 #define QUEUE_SIZE_ITEMS 10
@@ -35,6 +40,14 @@ PubSubClient  mqtt(client);
 uint32_t lastReconnectAttempt = 0;
 // servo
 static Servo s_servo; /**< Servo object */
+// disp
+#define TFT_DC 9
+#define TFT_CS -1
+#define TFT_RST 8
+#define X_BASE_PIXLE 60
+#define Y_BASE_PIXLE 90
+#define SCALE_SIZE 4 // x3
+Adafruit_ILI9341 tft = Adafruit_ILI9341(&SPI, TFT_DC, TFT_CS, TFT_RST);
 
 // ■function
 // felica
@@ -147,7 +160,6 @@ boolean mqttConnect() {
   return mqtt.connected();
 }
 
-
 void mqttInit()
 {
   Serial2.begin(9600, SERIAL_8N1);
@@ -249,6 +261,53 @@ void servoClose()
   s_servo.write(90);
 }
 
+void dispInit()
+{
+  Serial.println("ILI9341 Test!"); 
+  tft.begin(40000000);
+
+  // read diagnostics (optional but can help debug problems)
+  uint8_t x = tft.readcommand8(ILI9341_RDMODE);
+  Serial.print("Display Power Mode: 0x"); Serial.println(x, HEX);
+  x = tft.readcommand8(ILI9341_RDMADCTL);
+  Serial.print("MADCTL Mode: 0x"); Serial.println(x, HEX);
+  x = tft.readcommand8(ILI9341_RDPIXFMT);
+  Serial.print("Pixel Format: 0x"); Serial.println(x, HEX);
+  x = tft.readcommand8(ILI9341_RDIMGFMT);
+  Serial.print("Image Format: 0x"); Serial.println(x, HEX);
+  x = tft.readcommand8(ILI9341_RDSELFDIAG);
+  Serial.print("Self Diagnostic: 0x"); Serial.println(x, HEX); 
+  
+  // Create the QR code
+  QRCode qrcode;
+  uint8_t qrcodeData[qrcode_getBufferSize(3)];
+  qrcode_initText(&qrcode, qrcodeData, 3, 0, DISP_URL);
+  
+  // Serial.print(F("Text                     "));
+  // Serial.println(testText());
+  tft.fillScreen(ILI9341_WHITE);
+  // tft.setCursor(50, 50);
+  for (unsigned int y = 0; y < qrcode.size; y++) {
+    for (unsigned int x = 0; x < qrcode.size; x++) {
+        if (qrcode_getModule(&qrcode, x, y)){
+          tft.writeFillRect(
+            X_BASE_PIXLE +  (x * SCALE_SIZE),
+            Y_BASE_PIXLE +  (y * SCALE_SIZE),
+            SCALE_SIZE,
+            SCALE_SIZE,
+            ILI9341_BLACK);
+        }
+    }
+    // Serial.print("\n");
+  }
+
+  tft.setCursor(40, 240);
+  tft.setTextColor(ILI9341_BLACK);
+  tft.setTextSize(3);
+  tft.println("Spresense");
+}
+
+
 void ledLightUp()
 {
   digitalWrite(LED0, HIGH);
@@ -279,6 +338,8 @@ void setup() {
   felicaInit();
   mqttInit();
   servoInit();
+  dispInit();
+  ledLightUp();
 }
 
 void loop() {
