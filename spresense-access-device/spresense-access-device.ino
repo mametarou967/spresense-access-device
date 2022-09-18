@@ -129,6 +129,13 @@ void setup() {
 }
 
 void loop() {
-  felicaRead();
+  bool felicaReadResult = false;
+  felicaReadResult = felicaRead();
+  if(felicaReadResult)
+  {
+    servoOpen();
+    delay(5000);
+    servoClose();
+  }
   delay(500);
 }
