@@ -1,4 +1,5 @@
 // ■include
+#include <ArduinoQueue.h>
 // felica
 #include "RCS620S.h"
 #include <SoftwareSerial.h>
@@ -13,6 +14,8 @@
 #include <Servo.h>
 
 // ■constant
+#define QUEUE_SIZE_ITEMS 10
+ArduinoQueue<int> authQueue(QUEUE_SIZE_ITEMS);
 // felica
 SoftwareSerial mySerial(22, 23);    // RX,TXの割り当て
 RCS620S rcs620s(mySerial);
@@ -51,7 +54,7 @@ void felicaInit()
   Serial.print("felica Init success\n");
 }
 
-bool felicaRead()
+void felicaRead()
 {
   bool result = false;
   rcs620s.timeout = COMMAND_TIMEOUT;
@@ -79,7 +82,8 @@ bool felicaRead()
       0x000B,
       1 /* block id = 1 の末尾に番号が入っている*/);
 
-    result = true;
+    // 認証Queueにenqueue
+    authQueue.enqueue(1);
 
     while(1){
       if(rcs620s.polling() == 0){
@@ -119,6 +123,9 @@ void mqttCallback(char* topic, byte* payload, unsigned int len) {
   char buf[256];
   str.toCharArray(buf, 256);
   mqtt.publish(topicTest2, buf);
+
+  // 認証Queueにenqueue
+  authQueue.enqueue(1);
 }
 
 boolean mqttConnect() {
@@ -275,14 +282,16 @@ void setup() {
 }
 
 void loop() {
-  bool felicaReadResult = false;
-  felicaReadResult = felicaRead();
-  if(felicaReadResult)
+  felicaRead();
+  mqttLoop();
+
+  if (!authQueue.isEmpty())
   {
+    int value = authQueue.dequeue();
     servoOpen();
     delay(5000);
     servoClose();
   }
-  mqttLoop();
+  
   delay(500);
 }
